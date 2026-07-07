@@ -216,12 +216,13 @@ function randomJitter(min, max) {
 }
 
 function settingDelayMs(value, fallbackMs) {
-  return Number.isFinite(value) && value >= 0 ? value : fallbackMs;
+  const delayMs = Number.isFinite(value) && value >= 0 ? value : fallbackMs;
+  return Math.max(delayMs, 3000);
 }
 
 function getDetailConcurrency(settings) {
   const value = parseInt(settings.detailConcurrency, 10);
-  if (!Number.isFinite(value)) return 2;
+  if (!Number.isFinite(value)) return 1;
   return Math.min(Math.max(value, 1), 2);
 }
 
@@ -557,7 +558,7 @@ async function runScrapeLoop(searchTabId, startFromCurrentPage) {
 
         if (settings.fetchDetailPages && batch.some((facility) => facility.detailUrl)) {
           await sleep(
-            settingDelayMs(settings.detailPageDelayMs, 1000) +
+            settingDelayMs(settings.detailPageDelayMs, 5000) +
               randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs)
           );
         }
@@ -577,7 +578,7 @@ async function runScrapeLoop(searchTabId, startFromCurrentPage) {
       }
 
       await sleep(
-        settingDelayMs(settings.listPageDelayMs, 1000) +
+        settingDelayMs(settings.listPageDelayMs, 5000) +
           randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs)
       );
 

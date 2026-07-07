@@ -51,9 +51,9 @@
   function renderSettings(settings) {
     if (!settings) return;
     el("maxCount").value = settings.maxCount || "";
-    el("listPageDelaySec").value = formatDelaySec(settings.listPageDelayMs, 1000);
-    el("detailPageDelaySec").value = formatDelaySec(settings.detailPageDelayMs, 1000);
-    el("detailConcurrency").value = settings.detailConcurrency || 2;
+    el("listPageDelaySec").value = formatDelaySec(enforceMinDelayMs(settings.listPageDelayMs, 5000), 5000);
+    el("detailPageDelaySec").value = formatDelaySec(enforceMinDelayMs(settings.detailPageDelayMs, 5000), 5000);
+    el("detailConcurrency").value = settings.detailConcurrency || 1;
     el("resumeFromCurrentPage").checked = settings.resumeFromCurrentPage !== false;
     el("skipFetchedFacilities").checked = settings.skipFetchedFacilities !== false;
     el("fetchDetailPages").checked = settings.fetchDetailPages !== false;
@@ -61,7 +61,13 @@
 
   function parseDelayMs(value, fallbackMs) {
     const parsed = parseFloat(value);
-    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 1000) : fallbackMs;
+    const delayMs = Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 1000) : fallbackMs;
+    return enforceMinDelayMs(delayMs, fallbackMs);
+  }
+
+  function enforceMinDelayMs(valueMs, fallbackMs) {
+    const ms = Number.isFinite(valueMs) ? valueMs : fallbackMs;
+    return Math.max(ms, 3000);
   }
 
   function formatDelaySec(valueMs, fallbackMs) {
@@ -74,12 +80,12 @@
     const detailConcurrency = parseInt(el("detailConcurrency").value, 10);
     return {
       maxCount: maxCountRaw ? parseInt(maxCountRaw, 10) : null,
-      listPageDelayMs: parseDelayMs(el("listPageDelaySec").value, 1000),
-      detailPageDelayMs: parseDelayMs(el("detailPageDelaySec").value, 1000),
-      randomJitterMinMs: 200,
-      randomJitterMaxMs: 500,
+      listPageDelayMs: parseDelayMs(el("listPageDelaySec").value, 5000),
+      detailPageDelayMs: parseDelayMs(el("detailPageDelaySec").value, 5000),
+      randomJitterMinMs: 2000,
+      randomJitterMaxMs: 6000,
       retryCount: 2,
-      detailConcurrency: Number.isFinite(detailConcurrency) ? Math.min(Math.max(detailConcurrency, 1), 2) : 2,
+      detailConcurrency: Number.isFinite(detailConcurrency) ? Math.min(Math.max(detailConcurrency, 1), 2) : 1,
       resumeFromCurrentPage: el("resumeFromCurrentPage").checked,
       skipFetchedFacilities: el("skipFetchedFacilities").checked,
       fetchDetailPages: el("fetchDetailPages").checked
