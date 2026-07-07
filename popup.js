@@ -53,7 +53,7 @@
     el("maxCount").value = settings.maxCount || "";
     el("listPageDelaySec").value = formatDelaySec(settings.listPageDelayMs, 1000);
     el("detailPageDelaySec").value = formatDelaySec(settings.detailPageDelayMs, 1000);
-    el("detailConcurrency").value = settings.detailConcurrency || 5;
+    el("detailConcurrency").value = settings.detailConcurrency || 2;
     el("resumeFromCurrentPage").checked = settings.resumeFromCurrentPage !== false;
     el("skipFetchedFacilities").checked = settings.skipFetchedFacilities !== false;
     el("fetchDetailPages").checked = settings.fetchDetailPages !== false;
@@ -79,7 +79,7 @@
       randomJitterMinMs: 200,
       randomJitterMaxMs: 500,
       retryCount: 2,
-      detailConcurrency: Number.isFinite(detailConcurrency) ? Math.min(Math.max(detailConcurrency, 1), 5) : 5,
+      detailConcurrency: Number.isFinite(detailConcurrency) ? Math.min(Math.max(detailConcurrency, 1), 2) : 2,
       resumeFromCurrentPage: el("resumeFromCurrentPage").checked,
       skipFetchedFacilities: el("skipFetchedFacilities").checked,
       fetchDetailPages: el("fetchDetailPages").checked

@@ -204,7 +204,7 @@
       randomJitterMinMs: 200,
       randomJitterMaxMs: 500,
       retryCount: 2,
-      detailConcurrency: 5,
+      detailConcurrency: 2,
       resumeFromCurrentPage: true,
       skipFetchedFacilities: true,
       fetchDetailPages: true

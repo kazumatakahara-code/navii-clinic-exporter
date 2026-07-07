@@ -221,8 +221,8 @@ function settingDelayMs(value, fallbackMs) {
 
 function getDetailConcurrency(settings) {
   const value = parseInt(settings.detailConcurrency, 10);
-  if (!Number.isFinite(value)) return 3;
-  return Math.min(Math.max(value, 1), 5);
+  if (!Number.isFinite(value)) return 2;
+  return Math.min(Math.max(value, 1), 2);
 }
 
 async function openDetailTabAndExtract(detailUrl, settings, searchResultName) {
