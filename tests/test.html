@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>navii-clinic-exporter テスト</title>
+<style>
+  body { font-family: monospace; padding: 16px; background: #fafafa; }
+  h1 { font-size: 16px; }
+  #summary { font-weight: bold; margin: 10px 0; padding: 8px; border-radius: 6px; }
+  .pass-summary { background: #e6f4ea; color: #1e7b34; }
+  .fail-summary { background: #fdeaea; color: #c0392b; }
+  .case { padding: 3px 0; border-bottom: 1px dashed #ddd; }
+  .ok { color: #1e7b34; }
+  .ng { color: #c0392b; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>navii-clinic-exporter 単体テスト</h1>
+<div id="summary">実行中...</div>
+<div id="results"></div>
+
+<script src="../config.js"></script>
+<script src="../utils.js"></script>
+<script>
+(function () {
+  "use strict";
+  const U = window.NaviiUtils;
+  const results = [];
+  let passCount = 0;
+  let failCount = 0;
+
+  function assertEqual(name, actual, expected) {
+    const actualStr = JSON.stringify(actual);
+    const expectedStr = JSON.stringify(expected);
+    const ok = actualStr === expectedStr;
+    if (ok) passCount++; else failCount++;
+    results.push({ name, ok, actual: actualStr, expected: expectedStr });
+  }
+
+  function assertTrue(name, actual) {
+    assertEqual(name, !!actual, true);
+  }
+
+  // 1. S2400 URL判定
+  assertTrue(
+    "S2400 URL判定: 正しいURL",
+    U.isS2400Url("www.iryou.teikyouseido.mhlw.go.jp", "/znk-web/juminkanja/S2400/initialize")
+  );
+  assertTrue(
+    "S2400 URL判定: 異なるホスト",
+    !U.isS2400Url("example.com", "/znk-web/juminkanja/S2400/initialize")
+  );
+  assertTrue(
+    "S2400 URL判定: 異なるパス",
+    !U.isS2400Url("www.iryou.teikyouseido.mhlw.go.jp", "/znk-web/juminkanja/S2410/detail")
+  );
+
+  // 2. 電話番号正規化
+  assertEqual("電話番号正規化: （昼）付き", U.normalizePhone("（昼）072-850-1232").display, "072-850-1232");
+  assertEqual("電話番号正規化: 括弧市外局番", U.normalizePhone("(048)-969-2222").display, "048-969-2222");
+  assertEqual("電話番号正規化: 全角数字", U.normalizePhone("０３－１２３４－５６７８").display, "03-1234-5678");
+  assertEqual("電話番号正規化: 代表ラベル付き", U.normalizePhone("代表：03-1234-5678").display, "03-1234-5678");
+
+  // 3. FAX判定
+  assertTrue("FAX判定: FAXラベル", U.isFaxLabel("FAX：03-1234-5679"));
+  assertTrue("FAX判定: 電話ラベルはFALSE", !U.isFaxLabel("電話番号"));
+
+  // 4. 医院名正規化
+  assertEqual("医院名正規化: 前後の記号除去", U.normalizeClinicName("  > さくら内科クリニック ・ "), "さくら内科クリニック");
+
+  // 5. 住所正規化
+  assertEqual(
+    "住所正規化: 全角スペース整形",
+    U.normalizeAddress("東京都　新宿区西新宿1-2-3"),
+    "東京都 新宿区西新宿1-2-3"
+  );
+
+  // 6. 郵便番号抽出
+  assertEqual("郵便番号抽出: 通常形式", U.extractPostalCode("〒160-0023 東京都新宿区"), "160-0023");
+  assertEqual("郵便番号抽出: 見つからない場合は空", U.extractPostalCode("郵便番号不明"), "");
+
+  // 7. 都道府県抽出
+  assertEqual("都道府県抽出: 東京都", U.extractPrefecture("東京都新宿区西新宿1-2-3"), "東京都");
+  assertEqual("都道府県抽出: 見つからない場合は空", U.extractPrefecture("新宿区西新宿1-2-3"), "");
+
+  // 8. 住所１・住所２分割
+  {
+    const r = U.splitAddress("〒160-0023 東京都新宿区西新宿1-2-3 新宿ビル4階");
+    assertEqual("住所分割: 住所１", r.addr1, "新宿区西新宿1-2-3");
+    assertEqual("住所分割: 住所２", r.addr2, "新宿ビル4階");
+  }
+  {
+    const r = U.splitAddress("東京都新宿区西新宿1-2-3");
+    assertEqual("住所分割: 建物名なしは住所２空欄", r.addr2, "");
+  }
+
+  // 9. 曜日正規化
+  assertEqual(
+    "曜日正規化: 順序を固定順にする",
+    U.sortWeekdays(["日", "月", "祝", "水"]),
+    ["月", "水", "日", "祝"]
+  );
+
+  // 10. 休診日抽出
+  assertEqual(
+    "休診日抽出: 明示的な記載",
+    U.extractClosedDays("水曜・日曜・祝日休診"),
+    ["水", "日", "祝"]
+  );
+  assertEqual("休診日抽出: 記載なしは空配列", U.extractClosedDays("診療科目：内科"), []);
+
+  // 11. 診療時間解析
+  {
+    const hours = U.parseClinicHours([
+      "月 09:00-12:00 / 15:00-18:00",
+      "火 09:00-12:00 / 15:00-18:00",
+      "水 09:00-13:00"
+    ]);
+    assertEqual("診療時間解析: 月曜日", hours["月"], ["09:00-12:00", "15:00-18:00"]);
+    assertEqual("診療時間解析: 水曜日", hours["水"], ["09:00-13:00"]);
+  }
+
+  // 12. 午前・午後の代表時間決定
+  {
+    const hours = U.parseClinicHours([
+      "月 09:00-12:00 / 15:00-18:00",
+      "火 09:00-12:00 / 15:00-18:00",
+      "水 09:00-13:00",
+      "木 09:00-12:00 / 15:00-18:00",
+      "金 09:00-12:00 / 15:00-18:00",
+      "土 09:00-13:00"
+    ]);
+    const rep = U.determineRepresentativeHours(hours);
+    assertEqual("代表時間: 午前始", rep.amStart, "09:00");
+    assertEqual("代表時間: 午前終", rep.amEnd, "12:00");
+    assertEqual("代表時間: 午後始", rep.pmStart, "15:00");
+    assertEqual("代表時間: 午後終", rep.pmEnd, "18:00");
+  }
+
+  // 13. URL除外判定
+  assertTrue("URL除外判定: ナビイ内部URLは除外", U.isExcludedUrl("https://www.iryou.teikyouseido.mhlw.go.jp/foo"));
+  assertTrue("URL除外判定: javascript:は除外", U.isExcludedUrl("javascript:void(0)"));
+  assertTrue("URL除外判定: mailto:は除外", U.isExcludedUrl("mailto:test@example.com"));
+  assertTrue("URL除外判定: PDFは除外", U.isExcludedUrl("https://example.com/file.pdf"));
+  assertTrue("URL除外判定: 通常の外部HPは対象", !U.isExcludedUrl("https://clinic-example.jp/"));
+  assertTrue("URL除外判定: SNSのみは除外", U.isExcludedUrl("https://twitter.com/example"));
+
+  // 14. 重複判定
+  assertTrue(
+    "重複判定: 機関コード一致",
+    U.isDuplicateFacility({ facilityCode: "ABC123" }, { facilityCode: "ABC123" })
+  );
+  assertTrue(
+    "重複判定: 詳細URL一致",
+    U.isDuplicateFacility({ detailUrl: "https://a/x" }, { detailUrl: "https://a/x" })
+  );
+  assertTrue(
+    "重複判定: Tel1一致",
+    U.isDuplicateFacility({ tel1: "03-1234-5678" }, { tel1: "０３－１２３４－５６７８" })
+  );
+  assertTrue(
+    "重複判定: 名前＋住所一致",
+    U.isDuplicateFacility(
+      { name: "さくらクリニック", address: "東京都新宿区1-2-3" },
+      { name: "さくらクリニック", address: "東京都新宿区1-2-3" }
+    )
+  );
+  assertTrue(
+    "重複判定: 一致なし",
+    !U.isDuplicateFacility({ name: "A", address: "X" }, { name: "B", address: "Y" })
+  );
+
+  // 15. 重複データ統合
+  {
+    const { merged } = U.mergeFacilityRecords(
+      { name: "さくらクリニック", tel1: "" },
+      { name: "さくらクリニック", tel1: "03-1234-5678" }
+    );
+    assertEqual("重複統合: 空欄は上書きされ埋まる", merged.tel1, "03-1234-5678");
+  }
+  {
+    const { merged } = U.mergeFacilityRecords(
+      { name: "さくらクリニック" },
+      { name: "" }
+    );
+    assertEqual("重複統合: 空欄で既存値を上書きしない", merged.name, "さくらクリニック");
+  }
+
+  // 16. CSVエスケープ
+  assertEqual("CSVエスケープ: カンマ含む", U.csvEscapeValue("東京都,新宿区"), '"東京都,新宿区"');
+  assertEqual("CSVエスケープ: ダブルクォート含む", U.csvEscapeValue('内科"外科'), '"内科""外科"');
+  assertEqual("CSVエスケープ: 通常文字列", U.csvEscapeValue("内科"), "内科");
+
+  // 17. CSV列数検証
+  assertEqual(
+    "CSV列数検証: 不足分を空文字で補完",
+    U.validateAndPadRow(["a", "b"], 5),
+    ["a", "b", "", "", ""]
+  );
+  assertEqual(
+    "CSV列数検証: 超過分は切り捨て",
+    U.validateAndPadRow(["a", "b", "c", "d"], 2),
+    ["a", "b"]
+  );
+
+  // 18. ページ指紋生成
+  {
+    const fp1 = U.makePageFingerprint(1, "Aクリニック", "Zクリニック", ["u1", "u2"]);
+    const fp2 = U.makePageFingerprint(1, "Aクリニック", "Zクリニック", ["u1", "u2"]);
+    const fp3 = U.makePageFingerprint(2, "Aクリニック", "Zクリニック", ["u1", "u2"]);
+    assertEqual("ページ指紋: 同一条件は同一指紋", fp1, fp2);
+    assertTrue("ページ指紋: ページ番号が違えば異なる", fp1 !== fp3);
+  }
+
+  // 19. 非施設ノイズ判定
+  assertTrue("非施設ノイズ判定: 検索条件パネル", U.isNonFacilityNoiseText("検索条件", false));
+  assertTrue("非施設ノイズ判定: 設備タグ（喫煙対策あり）", U.isNonFacilityNoiseText("喫煙対策あり", false));
+  assertTrue("非施設ノイズ判定: 設備タグ（駐車場あり）", U.isNonFacilityNoiseText("駐車場あり", false));
+  assertTrue(
+    "非施設ノイズ判定: 施設らしい情報があれば除外しない",
+    !U.isNonFacilityNoiseText("駐車場ありクリニック", true)
+  );
+  assertTrue("非施設ノイズ判定: 通常の医院名は除外しない", !U.isNonFacilityNoiseText("さくら内科クリニック", true));
+
+  // 20. 診療時間サマリー整形（備考欄用）
+  {
+    const hours = U.parseClinicHours(["月 09:00-12:30", "月 15:00-18:00", "水 09:00-13:00"]);
+    const summary = U.buildScheduleSummaryText(hours);
+    assertEqual("診療時間サマリー: 1行整形", summary, "月09:00-12:30/15:00-18:00、水09:00-13:00");
+  }
+
+  // 21. 備考欄の整形結合（タブ・改行を含めない）
+  assertEqual(
+    "備考整形: タブ改行を除去し1行結合",
+    U.buildRemarksText(["診療時間:月09:00-12:00\n\t\t  \n\t\t-", "追加電話:03-0000-0000"]),
+    "診療時間:月09:00-12:00 -／追加電話:03-0000-0000"
+  );
+  assertEqual("備考整形: 単独の-は除外", U.buildRemarksText(["-", "備考あり"]), "備考あり");
+
+  // 22. カタカナのみ判定
+  assertTrue("カタカナ判定: カタカナのみ", U.isKatakanaOnly("アイアンドティー"));
+  assertTrue("カタカナ判定: 漢字混在はfalse", !U.isKatakanaOnly("I&T胃腸クリニック"));
+  assertTrue("カタカナ判定: ひらがなはfalse", !U.isKatakanaOnly("さくらクリニック"));
+
+  // 23. 医院名の最終決定ロジック（正式名称／カナ／検索結果名）
+  assertEqual(
+    "名前決定: ラベル値を優先する",
+    U.decideFacilityName("I&T胃腸と脳のクリニック", "", "アイアンドティー").name,
+    "I&T胃腸と脳のクリニック"
+  );
+  assertEqual(
+    "名前決定: ラベル値がカタカナのみでも採用する",
+    U.decideFacilityName("アイウエオクリニック", "", "x").name,
+    "アイウエオクリニック"
+  );
+  assertEqual(
+    "名前決定: ラベルが無ければ見出しを使う",
+    U.decideFacilityName("", "さくら内科クリニック", "x").name,
+    "さくら内科クリニック"
+  );
+  assertEqual(
+    "名前決定: 見出しがカナのみなら検索結果名にフォールバック",
+    U.decideFacilityName("", "アイウエオ", "さくらクリニック").name,
+    "さくらクリニック"
+  );
+  assertEqual("名前決定: 何も無ければ空欄", U.decideFacilityName("", "", "").name, "");
+
+  // 24. 種別（診療所が病院にならない／病院が診療所にならない／取得不能時は空欄）
+  assertEqual("種別: 診療所", U.determineFacilityType("診療所"), "診療所");
+  assertEqual("種別: 病院", U.determineFacilityType("病院"), "病院");
+  assertEqual("種別: 歯科診療所", U.determineFacilityType("歯科診療所"), "歯科診療所");
+  assertEqual("種別: 該当なしは空欄（病院を初期値にしない）", U.determineFacilityType("クリニック"), "");
+  assertEqual("種別: 空文字は空欄", U.determineFacilityType(""), "");
+
+  // 25. 曜日表記の正規化
+  assertEqual("曜日正規化: 月曜日→月", U.normalizeWeekdayToken("月曜日"), "月");
+  assertEqual("曜日正規化: 水曜→水", U.normalizeWeekdayToken("水曜"), "水");
+  assertEqual("曜日正規化: 祝日→祝", U.normalizeWeekdayToken("祝日"), "祝");
+  assertEqual("曜日正規化: 祝祭日→祝", U.normalizeWeekdayToken("祝祭日"), "祝");
+  assertEqual("曜日正規化: 該当なしは空欄", U.normalizeWeekdayToken("あいうえお"), "");
+
+  // 26. 時刻表記の正規化
+  assertEqual("時刻正規化: 9:00→09:00", U.normalizeTimeToken("9:00"), "09:00");
+  assertEqual("時刻正規化: 全角９：００→09:00", U.normalizeTimeToken("９：００"), "09:00");
+  assertEqual("時刻正規化: 9時00分→09:00", U.normalizeTimeToken("9時00分"), "09:00");
+  assertEqual("時刻正規化: 午前9時→09:00", U.normalizeTimeToken("午前9時"), "09:00");
+  assertEqual("時刻正規化: 15時30分→15:30", U.normalizeTimeToken("15時30分"), "15:30");
+  assertEqual("時刻正規化: 午後3時→15:00", U.normalizeTimeToken("午後3時"), "15:00");
+
+  // 27. 時間範囲の分解（全角波ダッシュ・から表記に対応）
+  assertEqual("時間範囲: 全角波ダッシュ", U.splitTimeRangeText("9:00〜12:00"), { start: "09:00", end: "12:00" });
+  assertEqual("時間範囲: から表記", U.splitTimeRangeText("9時から12時"), { start: "09:00", end: "12:00" });
+  assertEqual("時間範囲: 分解不能はnull", U.splitTimeRangeText("休診"), null);
+
+  // 28. 診療時間セルの解析（複数時間帯・休診表示）
+  assertEqual(
+    "セル解析: 複数時間帯",
+    U.parseScheduleCellText("09:00～12:00 / 15:00～18:00"),
+    { slots: ["09:00-12:00", "15:00-18:00"], closed: false }
+  );
+  assertEqual("セル解析: 休診表示", U.parseScheduleCellText("休診"), { slots: [], closed: true });
+  assertEqual("セル解析: -は休診扱い", U.parseScheduleCellText("-"), { slots: [], closed: true });
+  assertEqual("セル解析: 空欄は休診と断定しない", U.parseScheduleCellText(""), { slots: [], closed: false });
+
+  // 29. 曜日別診療時間の組み立て・代表時間・休診日決定（曜日が列/行どちらのテーブルでも同じ関数で処理できる）
+  {
+    const entries = [
+      { weekday: "月", cellText: "09:00～12:00 / 15:00～18:00" },
+      { weekday: "火", cellText: "09:00～12:00 / 15:00～18:00" },
+      { weekday: "水", cellText: "休診" },
+      { weekday: "木", cellText: "09:00～12:00 / 15:00～18:00" },
+      { weekday: "金", cellText: "09:00～12:00 / 15:00～18:00" },
+      { weekday: "土", cellText: "09:00～13:00" },
+      { weekday: "日", cellText: "休診" }
+    ];
+    const built = U.buildHoursByWeekdayFromEntries(entries);
+    assertEqual("診療時間組立: 診療日", U.determineClinicDays(built.hoursByWeekday), ["月", "火", "木", "金", "土"]);
+    assertEqual("診療時間組立: セルから休診曜日", built.explicitClosedWeekdays, ["水", "日"]);
+    const rep = U.determineRepresentativeHours(built.hoursByWeekday);
+    assertEqual("代表時間: 午前始", rep.amStart, "09:00");
+    assertEqual("代表時間: 午前終", rep.amEnd, "12:00");
+    assertEqual("代表時間: 午後始", rep.pmStart, "15:00");
+    assertEqual("代表時間: 午後終", rep.pmEnd, "18:00");
+    const closedDays = U.determineClosedDays([], built.explicitClosedWeekdays, built.hoursByWeekday, built.presentWeekdays);
+    assertEqual("休診日決定: 最終結果", closedDays, ["水", "日"]);
+  }
+
+  // 30. 一部曜日だけの場合に休診を推測しない
+  {
+    const entries = [
+      { weekday: "月", cellText: "09:00～12:00" },
+      { weekday: "火", cellText: "09:00～12:00" }
+    ];
+    const built = U.buildHoursByWeekdayFromEntries(entries);
+    const closedDays = U.determineClosedDays([], built.explicitClosedWeekdays, built.hoursByWeekday, built.presentWeekdays);
+    assertEqual("休診日決定: 一部曜日のみでは推測しない", closedDays, []);
+  }
+
+  // 結果表示
+  const resultsEl = document.getElementById("results");
+  for (const r of results) {
+    const div = document.createElement("div");
+    div.className = "case";
+    div.innerHTML =
+      `<span class="${r.ok ? "ok" : "ng"}">${r.ok ? "PASS" : "FAIL"}</span> ${r.name}` +
+      (r.ok ? "" : ` (期待値: ${r.expected} / 実際値: ${r.actual})`);
+    resultsEl.appendChild(div);
+  }
+
+  const summaryEl = document.getElementById("summary");
+  summaryEl.textContent = `成功: ${passCount}件 / 失敗: ${failCount}件 / 合計: ${passCount + failCount}件`;
+  summaryEl.className = failCount === 0 ? "pass-summary" : "fail-summary";
+})();
+</script>
+</body>
+</html>

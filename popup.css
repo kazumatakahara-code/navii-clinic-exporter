@@ -1,0 +1,170 @@
+body {
+  width: 340px;
+  font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  font-size: 12px;
+  margin: 0;
+  padding: 10px 12px 14px;
+  color: #222;
+  background: #fafafa;
+}
+
+h1 {
+  font-size: 14px;
+  margin: 2px 0 8px;
+}
+
+h2 {
+  font-size: 12px;
+  margin: 8px 0 6px;
+  color: #444;
+}
+
+.status-box {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px dashed #eee;
+}
+.status-row:last-child {
+  border-bottom: none;
+}
+
+.label {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.value {
+  font-weight: bold;
+  text-align: right;
+  word-break: break-all;
+}
+
+.value.small {
+  font-weight: normal;
+  font-size: 11px;
+  color: #555;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #eee;
+}
+
+.message-box {
+  background: #fff3cd;
+  border: 1px solid #ffe08a;
+  color: #7a5b00;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.hint {
+  color: #666;
+  font-size: 11px;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.test-result-box {
+  margin-top: 8px;
+  background: #f5f8ff;
+  border: 1px solid #cfe0ff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.test-result-box .trow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px dashed #dce6fb;
+}
+.test-result-box .trow:last-child {
+  border-bottom: none;
+}
+.test-result-box .tlabel {
+  color: #345;
+  flex-shrink: 0;
+}
+.test-result-box .tvalue {
+  font-weight: bold;
+  text-align: right;
+  word-break: break-all;
+}
+
+.settings-box {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.settings-box label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.settings-box label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-box input[type="number"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 5px;
+  margin-top: 2px;
+}
+
+.button-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+button {
+  flex: 1 1 auto;
+  padding: 6px 4px;
+  border: 1px solid #bbb;
+  border-radius: 5px;
+  background: #f2f2f2;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+button.primary {
+  background: #2a6df4;
+  color: #fff;
+  border-color: #2a6df4;
+}
+
+button.danger {
+  background: #fff;
+  color: #d32f2f;
+  border-color: #d32f2f;
+}
+
+button:hover {
+  opacity: 0.9;
+}

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "ナビイ医院情報エクスポーター",
+  "version": "1.0.0",
+  "description": "医療情報ネット「ナビイ」の検索結果（S2400）から医療機関情報を取得し、コールシステム用CSVとして出力します。",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ナビイ医院情報エクスポーター"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.iryou.teikyouseido.mhlw.go.jp/*"],
+      "js": ["config.js", "utils.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://www.iryou.teikyouseido.mhlw.go.jp/*"
+  ]
+}

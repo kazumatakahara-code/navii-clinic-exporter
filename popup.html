@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ナビイ医院情報エクスポーター</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <h1>ナビイ医院情報エクスポーター</h1>
+
+  <section class="status-box">
+    <div class="status-row">
+      <span class="label">実行状態</span>
+      <span id="statusValue" class="value status-badge">待機中</span>
+    </div>
+    <div class="status-row"><span class="label">現在の検索結果ページ</span><span id="currentPage" class="value">-</span></div>
+    <div class="status-row"><span class="label">総ページ数</span><span id="totalPages" class="value">-</span></div>
+    <div class="status-row"><span class="label">検索結果総件数</span><span id="totalCount" class="value">-</span></div>
+    <div class="status-row"><span class="label">取得済み件数</span><span id="fetchedCount" class="value">0</span></div>
+    <div class="status-row"><span class="label">重複除外件数</span><span id="duplicateCount" class="value">0</span></div>
+    <div class="status-row"><span class="label">エラー件数</span><span id="errorCount" class="value">0</span></div>
+    <div class="status-row"><span class="label">現在処理中の医院名</span><span id="currentFacilityName" class="value">-</span></div>
+    <div class="status-row"><span class="label">現在処理中の詳細URL</span><span id="currentDetailUrl" class="value small">-</span></div>
+    <div class="status-row"><span class="label">最終更新時刻</span><span id="lastUpdated" class="value small">-</span></div>
+  </section>
+
+  <section id="messageBox" class="message-box" hidden></section>
+
+  <section class="settings-box">
+    <h2>設定</h2>
+    <label>
+      最大取得件数（空欄=制限なし）
+      <input type="number" id="maxCount" min="1" placeholder="制限なし" />
+    </label>
+    <label>
+      検索結果ページ間の待機秒数
+      <input type="number" id="listPageDelaySec" min="1" value="3" />
+    </label>
+    <label>
+      詳細ページ間の待機秒数
+      <input type="number" id="detailPageDelaySec" min="1" value="3" />
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" id="resumeFromCurrentPage" checked />
+      現在のページから取得を開始する
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" id="skipFetchedFacilities" checked />
+      取得済み施設をスキップする
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" id="fetchDetailPages" checked />
+      詳細ページまで取得する
+    </label>
+  </section>
+
+  <section class="button-box">
+    <button id="btnStart" class="primary">取得開始</button>
+    <button id="btnPause">一時停止</button>
+    <button id="btnResume">再開</button>
+    <button id="btnAbort" class="danger">中止</button>
+  </section>
+  <section class="button-box">
+    <button id="btnExportCsv" class="primary">CSV出力</button>
+    <button id="btnExportErrorLog">エラーログ出力</button>
+    <button id="btnExportDebugLog">デバッグログ出力</button>
+  </section>
+  <section class="button-box">
+    <button id="btnClearData" class="danger">取得済みデータ消去</button>
+  </section>
+
+  <section class="settings-box">
+    <h2>DOM解析確認モード</h2>
+    <p class="hint">
+      現在開いているナビイの詳細ページだけを解析し、取得精度をその場で確認できます
+      （ページ遷移や巡回は行いません）。
+    </p>
+    <button id="btnTestCurrentPage" class="primary">このページをテスト</button>
+    <div id="testResultBox" class="test-result-box" hidden></div>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
