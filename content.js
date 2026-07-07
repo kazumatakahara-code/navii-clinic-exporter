@@ -317,31 +317,118 @@
   }
 
   // ---------------------------------------------------------
-  // ページネーション（次へ）
+  // ページネーション（次ページ）
   // ---------------------------------------------------------
 
-  function findNextButton() {
-    const candidates = queryAllFirstMatch(document, CFG.nextButtonSelectors);
-    const textPatterns = CFG.nextButtonTextPatterns || ["次へ"];
+  function isDisabledClickable(el) {
+    return (
+      el.hasAttribute("disabled") ||
+      el.getAttribute("aria-disabled") === "true" ||
+      (el.className || "").toString().includes("disabled")
+    );
+  }
 
-    for (const el of candidates) {
-      const text = getText(el) || el.getAttribute("aria-label") || el.getAttribute("title") || "";
-      const isDisabled =
-        el.hasAttribute("disabled") ||
-        el.getAttribute("aria-disabled") === "true" ||
-        (el.className || "").toString().includes("disabled");
-      if (isDisabled) continue;
-      if (textPatterns.some((p) => text.includes(p))) {
-        return el;
+  function getClickableLabel(el) {
+    return UTIL.safeStr(getText(el) || el.getAttribute("aria-label") || el.getAttribute("title") || "");
+  }
+
+  function getPaginationContainers() {
+    const containerSelectors = [
+      ".pagination.keyword",
+      ".pagination",
+      "[class*='pagination'][class*='keyword']",
+      "[class*='pagination']",
+      "[class*='pager']"
+    ];
+
+    const containers = [];
+    const seen = new Set();
+    for (const selector of containerSelectors) {
+      const found = Array.from(document.querySelectorAll(selector));
+      for (const container of found) {
+        if (!seen.has(container)) {
+          seen.add(container);
+          containers.push(container);
+        }
       }
     }
-    // フォールバック：候補の最後の要素（ページネーション内の「次」位置に多い）
-    return candidates.length ? candidates[candidates.length - 1] : null;
+    return containers;
+  }
+
+  function parsePageNumberLabel(text) {
+    const match = UTIL.toHalfWidth(UTIL.safeStr(text)).match(/^\s*(\d+)\s*$/);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
+  function detectCurrentPageFromPagination(containers) {
+    for (const container of containers) {
+      const candidates = Array.from(container.querySelectorAll("a, button, span, strong, em, li"));
+      for (const el of candidates) {
+        const classStr = (el.className || "").toString();
+        const isCurrent =
+          el.getAttribute("aria-current") === "page" ||
+          classStr.includes("active") ||
+          classStr.includes("current") ||
+          classStr.includes("selected");
+        if (!isCurrent) continue;
+
+        const pageNumber = parsePageNumberLabel(getClickableLabel(el));
+        if (pageNumber) return pageNumber;
+      }
+    }
+    return null;
+  }
+
+  function findNextPageNumberButton(currentPage) {
+    const containers = getPaginationContainers();
+    const detectedPage = currentPage || detectCurrentPageFromPagination(containers);
+    const current = Number(detectedPage);
+    if (!Number.isFinite(current) || current < 1) return { foundPagination: containers.length > 0, button: null };
+
+    const nextPageText = String(current + 1);
+    for (const container of containers) {
+      const candidates = Array.from(container.querySelectorAll("a, button"));
+      for (const el of candidates) {
+        if (isDisabledClickable(el)) continue;
+        if (UTIL.toHalfWidth(getClickableLabel(el)) === nextPageText) return { foundPagination: true, button: el };
+      }
+    }
+
+    return { foundPagination: containers.length > 0, button: null };
+  }
+
+  function findNextButton() {
+    const textPatterns = CFG.nextButtonTextPatterns || ["次へ"];
+
+    function matchesNextText(el) {
+      const text = getClickableLabel(el);
+      return textPatterns.some((p) => text.includes(p));
+    }
+
+    // 1) 設定済みのクラス名・aria-label・title候補から探す
+    const candidates = queryAllFirstMatch(document, CFG.nextButtonSelectors);
+    for (const el of candidates) {
+      if (isDisabledClickable(el)) continue;
+      if (matchesNextText(el)) return el;
+    }
+
+    // 2) 候補セレクタで見つからない場合、ページ内の全ての a / button 要素を
+    //    テキスト一致だけで探す（href="javascript:void(0)" のように、
+    //    クラス名やaria-labelを持たないJavaScriptイベント型のリンクに対応するため）
+    const allClickable = document.querySelectorAll("a, button");
+    for (const el of allClickable) {
+      if (isDisabledClickable(el)) continue;
+      if (matchesNextText(el)) return el;
+    }
+
+    return null;
   }
 
   function clickNextPageAndWait(previousFingerprint, timeoutMs) {
     return new Promise((resolve) => {
-      const nextBtn = findNextButton();
+      const currentPage = extractListPage().currentPage;
+      const numberedNext = findNextPageNumberButton(currentPage);
+      const nextBtn = numberedNext.button || (numberedNext.foundPagination ? null : findNextButton());
       if (!nextBtn) {
         resolve({ ok: false, reason: "NO_NEXT_BUTTON" });
         return;
