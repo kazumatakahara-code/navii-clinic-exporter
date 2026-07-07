@@ -219,6 +219,12 @@ function settingDelayMs(value, fallbackMs) {
   return Number.isFinite(value) && value >= 0 ? value : fallbackMs;
 }
 
+function getDetailConcurrency(settings) {
+  const value = parseInt(settings.detailConcurrency, 10);
+  if (!Number.isFinite(value)) return 3;
+  return Math.min(Math.max(value, 1), 5);
+}
+
 async function openDetailTabAndExtract(detailUrl, settings, searchResultName) {
   const tab = await new Promise((resolve) => {
     chrome.tabs.create({ url: detailUrl, active: false }, resolve);
@@ -238,6 +244,36 @@ async function openDetailTabAndExtract(detailUrl, settings, searchResultName) {
   } finally {
     chrome.tabs.remove(tab.id).catch(() => {});
   }
+}
+
+async function fetchDetailForFacility(facility, settings) {
+  let detailData = null;
+  let detailDebug = null;
+  let blockedDetected = false;
+  let detailFailed = false;
+
+  if (settings.fetchDetailPages && facility.detailUrl) {
+    let attempt = 0;
+    while (attempt <= settings.retryCount) {
+      const result = await openDetailTabAndExtract(facility.detailUrl, settings, facility.name);
+      if (result && result.ok) {
+        detailData = result.data;
+        detailDebug = result.debug || null;
+        break;
+      }
+      if (result && result.reason === "BLOCKED") {
+        blockedDetected = true;
+        break;
+      }
+      attempt++;
+      if (attempt <= settings.retryCount) {
+        await sleep(randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs));
+      }
+    }
+    detailFailed = !detailData && !blockedDetected;
+  }
+
+  return { facility, detailData, detailDebug, blockedDetected, detailFailed };
 }
 
 // ---------------------------------------------------------
@@ -418,47 +454,56 @@ async function runScrapeLoop(searchTabId, startFromCurrentPage) {
         totalCount: totalCount || 0
       });
 
-      for (const facility of facilities) {
+      const detailConcurrency = settings.fetchDetailPages ? getDetailConcurrency(settings) : 1;
+      let facilityIndex = 0;
+      while (facilityIndex < facilities.length) {
         if (abortRequested) break;
         await waitWhilePaused();
         if (abortRequested) break;
 
-        if (settings.maxCount && fetchedTotal >= settings.maxCount) break;
+        const batch = [];
+        while (facilityIndex < facilities.length && batch.length < detailConcurrency) {
+          if (settings.maxCount && fetchedTotal + batch.length >= settings.maxCount) break;
 
-        const alreadyDone =
-          settings.skipFetchedFacilities &&
-          ((facility.detailUrl && processedUrls.has(facility.detailUrl)) ||
-            (facility.facilityCode && processedCodes.has(facility.facilityCode)));
-        if (alreadyDone) continue;
+          const facility = facilities[facilityIndex];
+          facilityIndex++;
+
+          const alreadyDone =
+            settings.skipFetchedFacilities &&
+            ((facility.detailUrl && processedUrls.has(facility.detailUrl)) ||
+              (facility.facilityCode && processedCodes.has(facility.facilityCode)));
+          if (alreadyDone) continue;
+
+          batch.push(facility);
+        }
+
+        if (!batch.length) break;
 
         await setState({
-          currentFacilityName: facility.name,
-          currentDetailUrl: facility.detailUrl
+          currentFacilityName: batch.map((facility) => facility.name).filter(Boolean).join(" / "),
+          currentDetailUrl: batch.map((facility) => facility.detailUrl).filter(Boolean).join(" / ")
         });
 
-        let detailData = null;
-        let detailDebug = null;
-        let blockedDetected = false;
+        const batchResults = settings.fetchDetailPages
+          ? await Promise.all(batch.map((facility) => fetchDetailForFacility(facility, settings)))
+          : batch.map((facility) => ({
+              facility,
+              detailData: null,
+              detailDebug: null,
+              blockedDetected: false,
+              detailFailed: false
+            }));
 
-        if (settings.fetchDetailPages && facility.detailUrl) {
-          let attempt = 0;
-          while (attempt <= settings.retryCount) {
-            const result = await openDetailTabAndExtract(facility.detailUrl, settings, facility.name);
-            if (result && result.ok) {
-              detailData = result.data;
-              detailDebug = result.debug || null;
-              break;
-            }
-            if (result && result.reason === "BLOCKED") {
-              blockedDetected = true;
-              break;
-            }
-            attempt++;
-            if (attempt <= settings.retryCount) {
-              await sleep(randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs));
-            }
+        for (const result of batchResults) {
+          const { facility, detailData, detailDebug, blockedDetected, detailFailed } = result;
+
+          if (blockedDetected) {
+            await setState({ status: STATUS.BLOCKED });
+            abortRequested = true;
+            break;
           }
-          if (!detailData && !blockedDetected) {
+
+          if (detailFailed) {
             await appendErrorLog({
               date: new Date().toISOString(),
               name: facility.name,
@@ -490,31 +535,27 @@ async function runScrapeLoop(searchTabId, startFromCurrentPage) {
               parseErrors: (detailDebug.parseErrors || []).join(" / ")
             });
           }
+
+          const record = buildRecordFromListAndDetail(facility, detailData);
+          const mergeResult = await addOrMergeFacility(record);
+
+          if (facility.detailUrl) processedUrls.add(facility.detailUrl);
+          if (facility.facilityCode) processedCodes.add(facility.facilityCode);
+          await saveProcessedSets(processedUrls, processedCodes);
+
+          fetchedTotal++;
+          const stNow = await getState();
+          await setState({
+            fetchedCount: fetchedTotal,
+            duplicateCount: mergeResult.duplicated
+              ? (stNow.duplicateCount || 0) + 1
+              : stNow.duplicateCount || 0
+          });
         }
 
-        if (blockedDetected) {
-          await setState({ status: STATUS.BLOCKED });
-          abortRequested = true;
-          break;
-        }
+        if (abortRequested) break;
 
-        const record = buildRecordFromListAndDetail(facility, detailData);
-        const mergeResult = await addOrMergeFacility(record);
-
-        if (facility.detailUrl) processedUrls.add(facility.detailUrl);
-        if (facility.facilityCode) processedCodes.add(facility.facilityCode);
-        await saveProcessedSets(processedUrls, processedCodes);
-
-        fetchedTotal++;
-        const stNow = await getState();
-        await setState({
-          fetchedCount: fetchedTotal,
-          duplicateCount: mergeResult.duplicated
-            ? (stNow.duplicateCount || 0) + 1
-            : stNow.duplicateCount || 0
-        });
-
-        if (settings.fetchDetailPages && facility.detailUrl) {
+        if (settings.fetchDetailPages && batch.some((facility) => facility.detailUrl)) {
           await sleep(
             settingDelayMs(settings.detailPageDelayMs, 1000) +
               randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs)

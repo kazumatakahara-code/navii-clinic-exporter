@@ -53,6 +53,7 @@
     el("maxCount").value = settings.maxCount || "";
     el("listPageDelaySec").value = formatDelaySec(settings.listPageDelayMs, 1000);
     el("detailPageDelaySec").value = formatDelaySec(settings.detailPageDelayMs, 1000);
+    el("detailConcurrency").value = settings.detailConcurrency || 3;
     el("resumeFromCurrentPage").checked = settings.resumeFromCurrentPage !== false;
     el("skipFetchedFacilities").checked = settings.skipFetchedFacilities !== false;
     el("fetchDetailPages").checked = settings.fetchDetailPages !== false;
@@ -70,6 +71,7 @@
 
   function collectSettingsFromForm() {
     const maxCountRaw = el("maxCount").value;
+    const detailConcurrency = parseInt(el("detailConcurrency").value, 10);
     return {
       maxCount: maxCountRaw ? parseInt(maxCountRaw, 10) : null,
       listPageDelayMs: parseDelayMs(el("listPageDelaySec").value, 1000),
@@ -77,6 +79,7 @@
       randomJitterMinMs: 200,
       randomJitterMaxMs: 500,
       retryCount: 2,
+      detailConcurrency: Number.isFinite(detailConcurrency) ? Math.min(Math.max(detailConcurrency, 1), 5) : 3,
       resumeFromCurrentPage: el("resumeFromCurrentPage").checked,
       skipFetchedFacilities: el("skipFetchedFacilities").checked,
       fetchDetailPages: el("fetchDetailPages").checked
