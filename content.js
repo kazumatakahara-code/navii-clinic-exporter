@@ -424,7 +424,7 @@
     return null;
   }
 
-  function clickNextPageAndWait(previousFingerprint, timeoutMs) {
+  function clickNextPageAndWait(previousFingerprint, previousPage, timeoutMs) {
     return new Promise((resolve) => {
       const currentPage = extractListPage().currentPage;
       const numberedNext = findNextPageNumberButton(currentPage);
@@ -450,7 +450,9 @@
       function checkChanged() {
         if (resolved) return;
         const current = extractListPage();
-        if (current.fingerprint && current.fingerprint !== previousFingerprint) {
+        const pageChanged = previousPage && current.currentPage && current.currentPage !== previousPage;
+        const fingerprintChanged = current.fingerprint && current.fingerprint !== previousFingerprint;
+        if (pageChanged || fingerprintChanged) {
           resolved = true;
           clearTimeout(timeout);
           observer.disconnect();
@@ -870,7 +872,7 @@
         return true;
 
       case "NAVII_NEXT_PAGE":
-        clickNextPageAndWait(message.previousFingerprint, message.timeoutMs).then(sendResponse);
+        clickNextPageAndWait(message.previousFingerprint, message.previousPage, message.timeoutMs).then(sendResponse);
         return true; // 非同期応答
 
       case "NAVII_EXTRACT_DETAIL":

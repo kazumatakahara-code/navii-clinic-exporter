@@ -193,8 +193,30 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForListPageChange(searchTabId, previousFingerprint, previousPage, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 15000);
+
+  while (Date.now() < deadline) {
+    await sleep(500);
+    const response = await sendMessageToTab(searchTabId, { type: "NAVII_EXTRACT_LIST" });
+    if (!response || !response.ok) continue;
+
+    const pageChanged = previousPage && response.currentPage && response.currentPage !== previousPage;
+    const fingerprintChanged = response.fingerprint && response.fingerprint !== previousFingerprint;
+    if (pageChanged || fingerprintChanged) {
+      return { ok: true, page: response };
+    }
+  }
+
+  return { ok: false, reason: "NO_PAGE_CHANGE" };
+}
+
 function randomJitter(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function settingDelayMs(value, fallbackMs) {
+  return Number.isFinite(value) && value >= 0 ? value : fallbackMs;
 }
 
 async function openDetailTabAndExtract(detailUrl, settings, searchResultName) {
@@ -494,7 +516,7 @@ async function runScrapeLoop(searchTabId, startFromCurrentPage) {
 
         if (settings.fetchDetailPages && facility.detailUrl) {
           await sleep(
-            (settings.detailPageDelayMs || 3000) +
+            settingDelayMs(settings.detailPageDelayMs, 1000) +
               randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs)
           );
         }
@@ -514,17 +536,29 @@ async function runScrapeLoop(searchTabId, startFromCurrentPage) {
       }
 
       await sleep(
-        (settings.listPageDelayMs || 3000) +
+        settingDelayMs(settings.listPageDelayMs, 1000) +
           randomJitter(settings.randomJitterMinMs, settings.randomJitterMaxMs)
       );
 
       const nextResult = await sendMessageToTab(searchTabId, {
         type: "NAVII_NEXT_PAGE",
         previousFingerprint: fingerprint,
+        previousPage: currentPage || pageCount + 1,
         timeoutMs: 15000
       });
 
-      if (!nextResult || !nextResult.ok) {
+      let pageMoved = Boolean(nextResult && nextResult.ok);
+      if (!pageMoved && (!nextResult || nextResult.reason !== "NO_NEXT_BUTTON")) {
+        const fallbackResult = await waitForListPageChange(
+          searchTabId,
+          fingerprint,
+          currentPage || pageCount + 1,
+          10000
+        );
+        pageMoved = Boolean(fallbackResult && fallbackResult.ok);
+      }
+
+      if (!pageMoved) {
         // 次ページが無い＝最終ページまで完了
         await setState({ status: STATUS.DONE });
         break;

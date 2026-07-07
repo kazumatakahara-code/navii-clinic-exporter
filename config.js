@@ -199,10 +199,10 @@
     /** 待機時間などの既定値 */
     defaults: {
       maxCount: null, // null = 制限なし
-      listPageDelayMs: 3000,
-      detailPageDelayMs: 3000,
-      randomJitterMinMs: 500,
-      randomJitterMaxMs: 1500,
+      listPageDelayMs: 1000,
+      detailPageDelayMs: 1000,
+      randomJitterMinMs: 200,
+      randomJitterMaxMs: 500,
       retryCount: 2,
       resumeFromCurrentPage: true,
       skipFetchedFacilities: true,

@@ -51,21 +51,31 @@
   function renderSettings(settings) {
     if (!settings) return;
     el("maxCount").value = settings.maxCount || "";
-    el("listPageDelaySec").value = Math.round((settings.listPageDelayMs || 3000) / 1000);
-    el("detailPageDelaySec").value = Math.round((settings.detailPageDelayMs || 3000) / 1000);
+    el("listPageDelaySec").value = formatDelaySec(settings.listPageDelayMs, 1000);
+    el("detailPageDelaySec").value = formatDelaySec(settings.detailPageDelayMs, 1000);
     el("resumeFromCurrentPage").checked = settings.resumeFromCurrentPage !== false;
     el("skipFetchedFacilities").checked = settings.skipFetchedFacilities !== false;
     el("fetchDetailPages").checked = settings.fetchDetailPages !== false;
+  }
+
+  function parseDelayMs(value, fallbackMs) {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 1000) : fallbackMs;
+  }
+
+  function formatDelaySec(valueMs, fallbackMs) {
+    const ms = Number.isFinite(valueMs) ? valueMs : fallbackMs;
+    return String(Math.round((ms / 1000) * 10) / 10);
   }
 
   function collectSettingsFromForm() {
     const maxCountRaw = el("maxCount").value;
     return {
       maxCount: maxCountRaw ? parseInt(maxCountRaw, 10) : null,
-      listPageDelayMs: (parseInt(el("listPageDelaySec").value, 10) || 3) * 1000,
-      detailPageDelayMs: (parseInt(el("detailPageDelaySec").value, 10) || 3) * 1000,
-      randomJitterMinMs: 500,
-      randomJitterMaxMs: 1500,
+      listPageDelayMs: parseDelayMs(el("listPageDelaySec").value, 1000),
+      detailPageDelayMs: parseDelayMs(el("detailPageDelaySec").value, 1000),
+      randomJitterMinMs: 200,
+      randomJitterMaxMs: 500,
       retryCount: 2,
       resumeFromCurrentPage: el("resumeFromCurrentPage").checked,
       skipFetchedFacilities: el("skipFetchedFacilities").checked,
