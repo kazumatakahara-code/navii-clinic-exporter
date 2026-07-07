@@ -692,6 +692,35 @@
   }
 
   // ---------------------------------------------------------
+  // Shift-JIS (CP932相当) エンコード
+  // ---------------------------------------------------------
+
+  /**
+   * 文字列をShift-JIS(Windows-31J/CP932相当)のバイト列(Uint8Array)へ変換する。
+   * 変換表(NaviiSjisTable)に無い文字（絵文字や一部の特殊記号等）は、
+   * Windowsの文字コード変換で一般的な代替文字 "?" (0x3F) に置き換える
+   * （変換自体が失敗して処理全体が止まることを避けるため）。
+   */
+  function encodeShiftJIS(str) {
+    const table = global.NaviiSjisTable || {};
+    const s = safeStr(str);
+    const bytes = [];
+    for (const ch of s) {
+      const code = table[ch];
+      if (code === undefined) {
+        bytes.push(0x3f); // 未対応文字は "?" に置き換える
+        continue;
+      }
+      if (code > 0xff) {
+        bytes.push((code >> 8) & 0xff, code & 0xff);
+      } else {
+        bytes.push(code & 0xff);
+      }
+    }
+    return new Uint8Array(bytes);
+  }
+
+  // ---------------------------------------------------------
   // 16. CSVエスケープ / 17. CSV列数検証
   // ---------------------------------------------------------
 
@@ -788,6 +817,7 @@
     parseScheduleCellText,
     buildHoursByWeekdayFromEntries,
     determineClosedDays,
+    encodeShiftJIS,
     csvEscapeValue,
     buildCsvRow,
     validateAndPadRow,

@@ -21,6 +21,7 @@
 
 <script src="../config.js"></script>
 <script src="../utils.js"></script>
+<script src="../sjis-table.js"></script>
 <script>
 (function () {
   "use strict";
@@ -335,6 +336,22 @@
     const closedDays = U.determineClosedDays([], built.explicitClosedWeekdays, built.hoursByWeekday, built.presentWeekdays);
     assertEqual("休診日決定: 一部曜日のみでは推測しない", closedDays, []);
   }
+
+  // 31. Shift-JISエンコード（実例の医療機関名を含む）
+  {
+    const text = "医療法人相生会相生病院";
+    const bytes = U.encodeShiftJIS(text);
+    const decoded = new TextDecoder("shift_jis").decode(bytes);
+    assertEqual("Shift-JISエンコード: 実例の医療機関名が正しく往復する", decoded, text);
+  }
+  assertTrue(
+    "Shift-JISエンコード: 未対応文字は?に置き換える",
+    (() => {
+      const bytes = U.encodeShiftJIS("テスト😀クリニック");
+      const decoded = new TextDecoder("shift_jis").decode(bytes);
+      return decoded === "テスト?クリニック";
+    })()
+  );
 
   // 結果表示
   const resultsEl = document.getElementById("results");

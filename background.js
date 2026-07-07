@@ -10,7 +10,7 @@
  */
 
 /* global chrome, importScripts, NaviiConfig, NaviiUtils */
-importScripts("config.js", "utils.js");
+importScripts("config.js", "utils.js", "sjis-table.js");
 
 const CFG = self.NaviiConfig;
 const UTIL = self.NaviiUtils;
@@ -605,9 +605,9 @@ async function exportFacilitiesCsv() {
   for (const f of facilities) {
     lines.push(UTIL.buildCsvRow(recordToCsvRow(f)));
   }
-  const csvContent = "\uFEFF" + lines.join("\r\n") + "\r\n";
+  const csvContent = lines.join("\r\n") + "\r\n";
   const filename = `navii_clinics_call_system_${formatTimestampForFilename()}.csv`;
-  await downloadTextAsFile(csvContent, filename);
+  await downloadCsvAsShiftJIS(csvContent, filename);
   return { ok: true, filename, count: facilities.length };
 }
 
@@ -629,9 +629,9 @@ async function exportErrorLogCsv() {
       ])
     );
   }
-  const csvContent = "\uFEFF" + lines.join("\r\n") + "\r\n";
+  const csvContent = lines.join("\r\n") + "\r\n";
   const filename = `navii_clinics_errors_${formatTimestampForFilename()}.csv`;
-  await downloadTextAsFile(csvContent, filename);
+  await downloadCsvAsShiftJIS(csvContent, filename);
   return { ok: true, filename, count: log.length };
 }
 
@@ -660,16 +660,22 @@ async function exportDebugLogCsv() {
       ])
     );
   }
-  const csvContent = "\uFEFF" + lines.join("\r\n") + "\r\n";
+  const csvContent = lines.join("\r\n") + "\r\n";
   const filename = `navii_clinics_debug_${formatTimestampForFilename()}.csv`;
-  await downloadTextAsFile(csvContent, filename);
+  await downloadCsvAsShiftJIS(csvContent, filename);
   return { ok: true, filename, count: log.length };
 }
 
-async function downloadTextAsFile(text, filename) {
-  // service worker には FileReader/Blob URL の一部制約があるため data URL を使う
-  const base64 = base64EncodeUtf8(text);
-  const dataUrl = "data:text/csv;charset=utf-8;base64," + base64;
+/**
+ * CSVテキストをShift-JIS(Windows-31J/CP932相当)のバイト列へ変換してダウンロードする。
+ * ダブルクリックでExcelを開いた際に文字コード判定ミスで文字化けするのを防ぐため、
+ * UTF-8+BOMではなく、日本語版Windows Excelの既定文字コードであるShift-JISで出力する。
+ * 変換表に無い文字（絵文字等）は "?" に置き換えられる。
+ */
+async function downloadCsvAsShiftJIS(csvText, filename) {
+  const bytes = UTIL.encodeShiftJIS(csvText);
+  const base64 = base64EncodeBytes(bytes);
+  const dataUrl = "data:text/csv;charset=shift_jis;base64," + base64;
   return new Promise((resolve) => {
     chrome.downloads.download({ url: dataUrl, filename, saveAs: false }, (downloadId) => {
       resolve(downloadId);
@@ -677,12 +683,11 @@ async function downloadTextAsFile(text, filename) {
   });
 }
 
-function base64EncodeUtf8(str) {
-  const utf8Bytes = new TextEncoder().encode(str);
+function base64EncodeBytes(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
-  for (let i = 0; i < utf8Bytes.length; i += chunkSize) {
-    const chunk = utf8Bytes.subarray(i, i + chunkSize);
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode.apply(null, Array.from(chunk));
   }
   return btoa(binary);
